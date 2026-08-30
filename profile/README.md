@@ -1,111 +1,90 @@
-# HDU-py-515
+# HDU-py-515 · BCI-VR
 
-BCI-VR 是一个面向脑机接口与 VR 实验的本地开发平台。组织内的仓库按职责拆分，业务服务、算法、协议、运行环境和客户端彼此独立，通过 API、事件流和共享协议协作。
+BCI-VR 是一个面向脑机接口（BCI）与虚拟现实（VR）实验的本地开发平台。项目按职责拆分为 Web、业务 API、实时通知、算法、共享协议、基础设施和 Unity 客户端；它以本地开发与实验运行为中心，目前不包含服务器自动部署流程。
 
-## 仓库职责
+## 架构
 
-| 仓库 | 作用 |
+```text
+Web (React/Vite)
+  ├── REST ───────────────> API Management (Spring Boot)
+  ├── SSE <─────────────── Notification Service (Spring Boot)
+  └── Metrics / logs ────> Prometheus / Loki / Grafana
+
+API Management ──────────> ML Engine (local Python processes)
+API Management ──────────> Unity VR client
+API / Notification / ML ─> Common contracts
+All services ────────────> MySQL and local data directories
+```
+
+## 仓库
+
+| 仓库 | 职责 |
 | --- | --- |
-| [BCI-VR-web](https://github.com/HDU-py-515/BCI-VR-web) | React/Vite 网页入口，提供系统总览、受试者、采集、处理、训练、日志和 VR 启动界面 |
-| [BCI-VR-api-management](https://github.com/HDU-py-515/BCI-VR-api-management) | Spring Boot API，负责受试者、Session、采集、处理、训练和 VR 相关业务 |
-| [BCI-VR-notification-service](https://github.com/HDU-py-515/BCI-VR-notification-service) | 服务间事件网关，以及向 Web 推送状态变化的 SSE 服务 |
-| [BCI-VR-common-proto](https://github.com/HDU-py-515/BCI-VR-common-proto) | Protobuf 协议中心、事件主题、Java/Python/TypeScript SDK 和协议校验工具 |
-| [BCI-VR-ml-engine](https://github.com/HDU-py-515/BCI-VR-ml-engine) | EEG 数据采集、预处理、训练和实时推理 |
-| [BCI-VR-infra](https://github.com/HDU-py-515/BCI-VR-infra) | 开发环境配置、Docker Compose、数据库脚本、观测组件和启动编排 |
-| [BCI-VR-client-unity](https://github.com/HDU-py-515/BCI-VR-client-unity) | Unity VR 客户端工程；Unity 缓存和构建产物不提交 |
+| [BCI-VR-web](https://github.com/HDU-py-515/BCI-VR-web) | React/Vite 工作台、API 调用、SSE 与可观测性界面 |
+| [BCI-VR-api-management](https://github.com/HDU-py-515/BCI-VR-api-management) | Spring Boot REST API 与本机实验编排 |
+| [BCI-VR-notification-service](https://github.com/HDU-py-515/BCI-VR-notification-service) | 进程内事件网关与 SSE 推送 |
+| [BCI-VR-common-proto](https://github.com/HDU-py-515/BCI-VR-common-proto) | Protobuf、JSON Schema、稳定事件主题与多语言 SDK |
+| [BCI-VR-ml-engine](https://github.com/HDU-py-515/BCI-VR-ml-engine) | EEG 采集、预处理、训练与推理 |
+| [BCI-VR-infra](https://github.com/HDU-py-515/BCI-VR-infra) | MySQL、Compose、观测、schema 与本机启动脚本 |
+| [BCI-VR-client-unity](https://github.com/HDU-py-515/BCI-VR-client-unity) | Unity XR/VR 客户端 |
 
-## 一键启动开发环境
+## 快速开始
 
-环境要求：Docker Desktop、PowerShell 7、Node.js LTS、JDK 17、Maven 3.9+。首次使用请确保 Docker Desktop 已登录并处于运行状态。
+### 环境要求
 
-在 `BCI-VR-infra` 目录执行：
+- Docker Desktop
+- PowerShell 7
+- JDK 17 与 Maven 3.9+
+- Node.js 20 LTS
+- Python 3.10+（运行 ML 时）
+- Unity `2022.3.51f1c1`（运行 VR 时）
+
+将所有 BCI-VR 仓库克隆到同一个父目录后：
 
 ```powershell
+cd BCI-VR-infra
+Copy-Item dev/.env.example dev/.env
+# 在 dev/.env 中设置 MYSQL_ROOT_PASSWORD
 .\scripts\Start-BCI-Stack.ps1
 ```
 
-也可以直接双击项目根目录的 `start-bci-stack.cmd`，或使用桌面的“启动 BCI-VR”快捷方式。启动内容包括：
+默认地址：
 
-- Docker MySQL 8.4
-- common-proto 共享 SDK 构建
-- API 管理服务（8080）
-- 通知服务（8090）
-- React Web（3000）
-- Prometheus（9090）、Loki（3100）和 Grafana（3001）
+| 服务 | 地址 |
+| --- | --- |
+| Web | <http://127.0.0.1:3000/> |
+| API | <http://127.0.0.1:8080/api/health> |
+| Notification | <http://127.0.0.1:8090/actuator/health> |
+| Prometheus | <http://127.0.0.1:9090/> |
+| Loki | <http://127.0.0.1:3100/> |
+| Grafana | <http://127.0.0.1:3001/> |
 
-网页地址：<http://127.0.0.1:3000/>
-
-停止全部本地服务：
+停止本地栈：
 
 ```powershell
 .\scripts\Stop-BCI-Stack.ps1
 ```
 
-## 仅启动 Docker 服务
-
-如果只需要容器化依赖和观测组件：
+如需完全容器化的本地服务：
 
 ```powershell
-cd BCI-VR-infra
 .\scripts\Start-Docker-Stack.ps1 -Build
 ```
 
-ML 批处理和协议工具是按需启动的：
+ML 批处理与协议工具是可选 profile：`-WithBatch`、`-WithTools`。接入真实 EEG 硬件、LSL、Neuracle 或 Unity 实时推理时，建议使用本机环境。
 
-```powershell
-.\scripts\Start-Docker-Stack.ps1 -Build -WithBatch -WithTools
-```
+## 开发流程
 
-硬件采集仍建议使用本机 Python 环境，以便访问 LSL、Neuracle 和 Unity。
+1. 从 `main` 创建功能分支。
+2. 修改前确认公共协议、API 路由与下游消费者。
+3. 运行对应仓库 README 中的验证命令。
+4. 推送分支并创建 PR；轻量 CI 会在 PR 阶段执行。
+5. 检查通过后合并到 `main`；Java、Web、协议与基础设施按各自 workflow 继续验证，服务镜像在适用仓库发布到 GHCR。
 
-## 单独开发仓库
+共享契约采取向后兼容的演进方式：只新增字段编号，不复用已发布字段、枚举值或事件主题。不要提交密钥、本机绝对路径、实验数据、模型包、数据库卷、Unity 缓存或构建产物。
 
-Web：
+## CI 说明
 
-```powershell
-cd BCI-VR-web
-corepack pnpm install --frozen-lockfile
-corepack pnpm dev
-```
+每个业务仓库都有轻量 PR CI。ML 的 PR 检查刻意不安装 PyTorch、SciPy、MNE 等大型依赖；完整依赖层在 Docker 镜像构建中缓存。Unity 当前执行项目完整性检查，不执行云端 Player 构建。
 
-API 和通知服务需要先安装 common-proto：
-
-```powershell
-cd BCI-VR-common-proto
-mvn install
-
-cd ..\BCI-VR-api-management
-mvn spring-boot:run
-
-cd ..\BCI-VR-notification-service
-mvn spring-boot:run
-```
-
-ML Engine：
-
-```powershell
-cd BCI-VR-ml-engine
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-pip install -e .
-Copy-Item .env.example .env
-python scripts/validate_environment.py
-```
-
-Unity：使用 Unity Hub 打开 `BCI-VR-client-unity`。当前工程版本为 `2022.3.51f1c1`；如需实时推理，请同时准备 ML Engine 的推理进程。
-
-## 本地数据与日志
-
-数据库数据保存在 Docker 命名卷中，EEG 原始数据、处理结果、模型包和运行日志均属于本机开发数据，不进入 GitHub。各服务日志可在对应仓库的 `logs/` 目录查看，并由本地观测组件采集到 Loki。
-
-## 开发约定
-
-- 所有仓库默认分支为 `main`。
-- 本地开发不得直接提交到 `main`；每项工作都要新建分支。
-- 新功能使用 `feat/<开发简写>-<简短描述>`，问题修复使用 `fix/<开发简写>-<简短描述>`，例如 `feat/p515-sse-status`、`fix/p515-web-startup`。
-- 完成开发后推送分支并提交 Pull Request（PR），通过检查和评审后再合并到 `main`。
-- PR 合并后及时删除已完成的功能分支，保持仓库分支整洁。
-- 修改共享协议时，只新增字段编号，不复用已发布编号。
-- 合并前运行对应仓库测试；API、通知服务和 Web 的 CI 会在合并前执行校验。
-- 不提交密钥、本机绝对路径、Unity 缓存、构建产物和实验数据。
+部分跨仓库 Java 工作流需要 `REPO_ACCESS_TOKEN` 读取私有 Common 仓库。该 Secret 仅配置在需要它的仓库中，绝不写入源码或文档。
